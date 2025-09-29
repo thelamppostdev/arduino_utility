@@ -53,6 +53,9 @@ export const selectSerialPort = async (manual: boolean, debug: boolean): Promise
     let selectedIndex = -1;
     for (let p of ports) {
       if (p.path.includes("usbmodem")) {
+        if(debug) {
+          console.log(`Found Arduino at ${p.path}`);
+        }
         selectedIndex = ports.indexOf(p);
       }
     }

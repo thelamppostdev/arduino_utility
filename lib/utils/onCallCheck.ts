@@ -2,6 +2,7 @@ import {spawn} from "node:child_process";
 import {Arguments} from "yargs";
 import {SerialConnection} from "../serial/SerialConnection";
 import {ITermArguments} from "./Interfaces";
+import * as path from "path";
 
 export const startOnCallChecker = (
   argv: Arguments<ITermArguments>,
@@ -11,7 +12,10 @@ export const startOnCallChecker = (
     console.log("Starting on-call checker");
   }
   let onCall = false;
-  const camCheckScript = spawn('bash', ['check_camera.sh']);
+  
+  // Get the path to the bundled script
+  const scriptPath = path.join(__dirname, '../scripts/check_camera.sh');
+  const camCheckScript = spawn('bash', [scriptPath]);
 
   camCheckScript.stdout.on('data', (data: Buffer) => {
     const logEntry = data.toString();
@@ -23,7 +27,7 @@ export const startOnCallChecker = (
         }
 
         if(serial.isReady && !onCall) {
-          serial.write("onair-red");
+          serial.write("onair-red;");
         }
         onCall = true;
       }
@@ -33,7 +37,7 @@ export const startOnCallChecker = (
         }
 
         if(serial.isReady && onCall) {
-          serial.write("onair-green");
+          serial.write("onair-green;");
         }
         onCall = false;
       }

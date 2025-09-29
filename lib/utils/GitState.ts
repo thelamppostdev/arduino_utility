@@ -1,5 +1,3 @@
-import {monitorEventLoopDelay} from "node:perf_hooks";
-
 export enum BucketStatus {
   pass,
   fail,
@@ -16,7 +14,7 @@ export class GitState {
 
   constructor() {
     this._repo = "dexcom-inc/therapeutic-portal";
-    this._prNumber = "44";
+    this._prNumber = null;
     this._state = BucketStatus.none;
   }
 

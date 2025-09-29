@@ -17,30 +17,52 @@ const termBuilder: CommandBuilder = (yargs) =>
 
 const termCommand: CommandModule = {
   handler: async (argv: Arguments<ITermArguments>) => {
-    const serialPort = await selectSerialPort(argv.manual, argv.debug)
+    let serialPort = await selectSerialPort(argv.manual, argv.debug)
     const serial = new SerialConnection(serialPort, argv.debug);
     const gitState = new GitState();
 
-    setInterval(() => startGithubPrChecker(argv, serial, gitState), 5000);
-    startOnCallChecker(argv, serial);
+    let parser = serial.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+    parser.on('data', (data: string) => {
+      if(argv.debug) {
+        console.log(`RX: ${data}`);
+      }
 
-    const parser = serial.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
-
-    serial.port.on('data', (data: string) => {
-      if(data) {
-        if (argv.debug) {
-          console.log(`RX: ${data}`);
+      if(data == "Initialized!") {
+        if(argv.debug) {
+          console.log("Serial ready!");
         }
-        // if (strData == "Initialized!") {
-        //   console.log("Serial port initialized!");
-        //   serial.setReady = true;
-        // }
-        if(!serial.isReady) {
-          console.log("Serial port initialized!");
-          serial.setReady = true;
-        }
+        serial.setReady = true;
       }
     });
+
+    // setInterval(() => startGithubPrChecker(argv, serial, gitState), 5000);
+    startOnCallChecker(argv, serial);
+
+    serialPort.on('close', (err: any) => {
+      if(err) {
+        console.error("Error closing port: ", err.message);
+      }
+      console.log("Port closed...reconnecting!");
+      serial.setReady = false;
+      setTimeout(() => {
+        selectSerialPort(false, false).then((port) => {
+          serialPort = port;
+          parser = serial.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+          parser.on('data', (data: string) => {
+            if(argv.debug) {
+              console.log(`RX: ${data}`);
+            }
+
+            if(data == "Initialized!") {
+              if(argv.debug) {
+                console.log("Serial ready!");
+              }
+              serial.setReady = true;
+            }
+          });
+        })
+      }, 10000)
+    })
 
     const terminalRead = readline.createInterface({
       input: process.stdin,
@@ -52,8 +74,14 @@ const termCommand: CommandModule = {
         terminalRead.close();
         serialPort.close()
         process.exit(0);
+      } else if(input.startsWith("pr")) {
+        gitState.prNumber = input.split(" ")[1];
+      } else {
+        if(argv.debug) {
+          console.log(`Add to TX Buffer: ${input}`);
+        }
+        serial.write(input);
       }
-      serial.write(input);
     });
   },
   describe: 'A simple serial terminal',

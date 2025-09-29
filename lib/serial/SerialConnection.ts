@@ -13,6 +13,9 @@ export class SerialConnection {
     this._txData = []
 
     // Poll for data to write
+    if(this._debug) {
+      console.log("Starting write poller");
+    }
     setInterval(() => this.bufferedWrite(), 50)
   }
 
@@ -21,7 +24,7 @@ export class SerialConnection {
       const data = this._txData.shift()
       if(data != undefined) {
         if (this._debug) {
-          console.log("TX: " + data.toString());
+          console.log("Writing to serial: " + data.toString());
         }
         this._port.write(data, (err) => {
           if (err) {

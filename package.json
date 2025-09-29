@@ -16,10 +16,11 @@
     "cli": "./build/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r lib/scripts build/",
     "package": "pkg . --targets node14-macos-x64 --output cli"
   },
   "pkg": {
-    "scripts": "build/**/*.js"
+    "scripts": "build/**/*.js",
+    "assets": "build/scripts/**/*"
   }
 }
