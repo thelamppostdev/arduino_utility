@@ -108,29 +108,42 @@ export class ArduinoManager extends EventEmitter {
   }
 
   private async reconnect(): Promise<void> {
-    this.cleanup();
+    await this.cleanup();
     await this.connect();
   }
 
-  private cleanup(): void {
+  private async cleanup(): Promise<void> {
     if (this.reconnectInterval) {
       clearTimeout(this.reconnectInterval);
       this.reconnectInterval = null;
+    }
+
+    if (this.parser) {
+      this.parser.removeAllListeners();
+      this.parser = null;
     }
 
     if (this.connection) {
       try {
         this.connection.port.removeAllListeners();
         if (this.connection.port.isOpen) {
-          this.connection.port.close();
+          // Wait for port to close properly
+          await new Promise<void>((resolve, reject) => {
+            this.connection!.port.close((error) => {
+              if (error) {
+                logger.error(`Error closing port: ${error.message}`);
+                reject(error);
+              } else {
+                logger.debug('Port closed successfully');
+                resolve();
+              }
+            });
+          });
         }
       } catch (error) {
         logger.error(`Error during cleanup: ${error.message}`);
       }
-    }
-
-    if (this.parser) {
-      this.parser.removeAllListeners();
+      this.connection = null;
     }
   }
 
@@ -169,9 +182,9 @@ export class ArduinoManager extends EventEmitter {
     };
   }
 
-  disconnect(): void {
+  async disconnect(): Promise<void> {
     logger.info('Disconnecting from Arduino...');
-    this.cleanup();
+    await this.cleanup();
     this.removeAllListeners();
   }
 }

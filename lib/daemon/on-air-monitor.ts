@@ -1,115 +1,135 @@
-import {ArduinoManager} from "./arduino-manager";
-import {logger} from "../utils/logger";
-import {exec} from "child_process";
-import {promisify} from "util";
+import { spawn } from 'child_process';
+import { ArduinoManager } from './arduino-manager';
+import { EventEmitter } from 'events';
+import * as path from 'path';
 
-const execAsync = promisify(exec);
-
-export class OnAirMonitor {
-  private arduino: ArduinoManager;
+export class OnAirMonitor extends EventEmitter {
   private isMonitoring = false;
-  private monitorInterval: NodeJS.Timeout | null = null;
-  private lastOnAirStatus: boolean | null = null;
-  private checkIntervalMs = 5000; // Check every 5 seconds
+  private manualOverride: 'on' | 'off' | null = null;
+  private lastStatus: 'available' | 'on-call' = 'available';
+  private arduinoManager: ArduinoManager;
+  private cameraMonitorProcess: any = null;
+  private onCall = false;
 
-  constructor(arduino: ArduinoManager) {
-    this.arduino = arduino;
+  constructor(arduinoManager: ArduinoManager) {
+    super();
+    this.arduinoManager = arduinoManager;
   }
 
-  start(): void {
-    if (this.isMonitoring) {
-      logger.warn('On-air monitoring is already running');
-      return;
-    }
-
-    logger.info('Starting on-air monitoring');
+  public start(): void {
+    if (this.isMonitoring) return;
+    
     this.isMonitoring = true;
+    console.log('🎥 Starting camera monitoring...');
     
-    // Start monitoring immediately and then at intervals
-    this.checkOnAirStatus();
-    this.monitorInterval = setInterval(() => {
-      this.checkOnAirStatus();
-    }, this.checkIntervalMs);
+    // Start with available status
+    this.updateStatus('available');
+    
+    // Start the camera monitoring process
+    this.startCameraMonitoring();
   }
 
-  stop(): void {
-    if (!this.isMonitoring) {
-      return;
-    }
-
-    logger.info('Stopping on-air monitoring');
+  public stop(): void {
+    if (!this.isMonitoring) return;
+    
     this.isMonitoring = false;
+    console.log('🎥 Stopping camera monitoring...');
     
-    if (this.monitorInterval) {
-      clearInterval(this.monitorInterval);
-      this.monitorInterval = null;
+    if (this.cameraMonitorProcess) {
+      this.cameraMonitorProcess.kill();
+      this.cameraMonitorProcess = null;
     }
   }
 
-  private async checkOnAirStatus(): Promise<void> {
-    try {
-      const isOnCall = await this.detectCallStatus();
-      
-      // Only send command if status changed
-      if (isOnCall !== this.lastOnAirStatus) {
-        const command = isOnCall ? 'onair-red' : 'onair-blue';
-        const success = this.arduino.write(command);
-        
-        if (success) {
-          logger.info(`On-air status changed: ${isOnCall ? 'ON CALL' : 'AVAILABLE'}`);
-          this.lastOnAirStatus = isOnCall;
-        } else {
-          logger.warn(`Failed to send on-air command: ${command}`);
-        }
-      }
-    } catch (error) {
-      logger.error(`Error checking on-air status: ${error.message}`);
+  public setManualOverride(status: 'on' | 'off' | null): void {
+    this.manualOverride = status;
+    
+    if (status === 'on') {
+      this.updateStatus('on-call');
+      console.log('🔴 Manual override: ON CALL (red)');
+    } else if (status === 'off') {
+      this.updateStatus('available');
+      console.log('🟢 Manual override: AVAILABLE (green)');
+    } else {
+      console.log('🔄 Manual override disabled - returning to automatic detection');
     }
   }
 
-  private async detectCallStatus(): Promise<boolean> {
-    try {
-      // Check for common video call applications on macOS
-      const { stdout } = await execAsync('ps aux | grep -E "(zoom|teams|webex|meet|facetime|skype|discord)" | grep -v grep | wc -l');
-      const runningApps = parseInt(stdout.trim());
-      
-      if (runningApps > 0) {
-        // Additional check for camera usage (more reliable indicator)
-        try {
-          const { stdout: cameraCheck } = await execAsync('lsof | grep "AppleCamera\\|VDCAssistant" | wc -l');
-          const cameraInUse = parseInt(cameraCheck.trim());
-          return cameraInUse > 0;
-        } catch (cameraError) {
-          // Fallback to just process detection if camera check fails
-          logger.debug('Camera check failed, using process detection only');
-          return runningApps > 0;
-        }
-      }
-      
-      return false;
-    } catch (error) {
-      logger.error(`Error detecting call status: ${error.message}`);
-      return false;
-    }
-  }
-
-  getStatus(): object {
+  public getStatus(): { status: 'available' | 'on-call', manualOverride: boolean } {
     return {
-      monitoring: this.isMonitoring,
-      lastStatus: this.lastOnAirStatus,
-      checkInterval: this.checkIntervalMs
+      status: this.lastStatus,
+      manualOverride: this.manualOverride !== null
     };
+  }
+
+  private startCameraMonitoring(): void {
+    // Use the same camera detection approach that was working
+    const scriptPath = path.join(__dirname, '../scripts/check_camera.sh');
+    console.log(`🎥 Starting camera monitoring with script: ${scriptPath}`);
+    
+    this.cameraMonitorProcess = spawn('bash', [scriptPath]);
+
+    this.cameraMonitorProcess.stdout.on('data', (data: Buffer) => {
+      // Skip manual override
+      if (this.manualOverride !== null) return;
+      
+      const logEntry = data.toString();
+      console.log(`🎥 Camera log: ${logEntry.trim()}`);
+
+      if (logEntry.includes("AppleH13CamIn")) {
+        if (logEntry.includes("power_on_hardware")) {
+          console.log("📹 Camera powered ON - setting red LED");
+          if (!this.onCall) {
+            this.onCall = true;
+            this.updateStatus('on-call');
+          }
+        }
+        if (logEntry.includes("power_off_hardware")) {
+          console.log("📹 Camera powered OFF - setting green LED");
+          if (this.onCall) {
+            this.onCall = false;
+            this.updateStatus('available');
+          }
+        }
+      }
+    });
+
+    this.cameraMonitorProcess.stderr.on('data', (data: Buffer) => {
+      console.error(`🎥 Camera monitor error: ${data.toString()}`);
+    });
+
+    this.cameraMonitorProcess.on('close', (code: number) => {
+      console.log(`🎥 Camera monitor script exited with code ${code}`);
+      
+      // Restart if we're still monitoring and it wasn't manually stopped
+      if (this.isMonitoring && code !== 0) {
+        console.log('🔄 Restarting camera monitor...');
+        setTimeout(() => this.startCameraMonitoring(), 2000);
+      }
+    });
+  }
+
+  private updateStatus(status: 'available' | 'on-call'): void {
+    if (this.lastStatus === status) return;
+    
+    this.lastStatus = status;
+    const command = status === 'on-call' ? 'onair-red' : 'onair-green';
+    
+    if (this.arduinoManager.write(command)) {
+      console.log(`✅ Status updated: ${status.toUpperCase()}`);
+      this.emit('statusChanged', status);
+    } else {
+      console.log(`❌ Failed to update status: ${status}`);
+    }
   }
 
   // Allow manual override for testing
   setOnAirStatus(isOnAir: boolean): boolean {
-    const command = isOnAir ? 'onair-red' : 'onair-blue';
-    const success = this.arduino.write(command);
-    
-    if (success) {
-      logger.info(`Manual on-air status set: ${isOnAir ? 'ON CALL' : 'AVAILABLE'}`);
+    if (isOnAir) {
+      this.setManualOverride('on');
+    } else {
+      this.setManualOverride('off');
     }
-    
-    return success;
+    return true;
   }
 }

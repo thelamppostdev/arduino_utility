@@ -65,7 +65,7 @@ arduino-cli status               # Check daemon and Arduino status
 ```bash
 # Status LED (on-air indicator)
 arduino-cli send "onair-red"     # On-call (red)
-arduino-cli send "onair-blue"    # Available (blue)
+arduino-cli send "onair-green"   # Available (green)
 
 # LED Ring (status display)
 arduino-cli send "ring-green-fire"      # Green with fire animation
@@ -117,7 +117,7 @@ Logs are stored in `~/Library/Logs/arduino-utility/`:
 
 The daemon automatically monitors your system for video call applications and camera usage:
 - **Red LED**: Detects active video calls (Zoom, Teams, Meet, etc.)
-- **Blue LED**: No calls detected (available)
+- **Green LED**: No calls detected (available)
 - **Check interval**: Every 5 seconds
 
 ## Architecture

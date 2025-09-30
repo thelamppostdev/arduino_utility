@@ -182,15 +182,15 @@ export class DaemonServer {
     return new Promise((resolve) => {
       this.server.close(() => {
         // Disconnect Arduino
-        this.arduino.disconnect();
+        this.arduino.disconnect().then(() => {
+          // Remove socket file
+          if (fs.existsSync(SOCKET_PATH)) {
+            fs.unlinkSync(SOCKET_PATH);
+          }
 
-        // Remove socket file
-        if (fs.existsSync(SOCKET_PATH)) {
-          fs.unlinkSync(SOCKET_PATH);
-        }
-
-        logger.info('Daemon shutdown complete');
-        resolve();
+          logger.info('Daemon shutdown complete');
+          resolve();
+        });
       });
     });
   }
