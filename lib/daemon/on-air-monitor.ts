@@ -55,10 +55,13 @@ export class OnAirMonitor extends EventEmitter {
     }
   }
 
-  public getStatus(): { status: 'available' | 'on-call', manualOverride: boolean } {
+  public getStatus(): { status: 'available' | 'on-call', manualOverride: boolean, monitoring: boolean, lastStatus: boolean, checkInterval: number } {
     return {
       status: this.lastStatus,
-      manualOverride: this.manualOverride !== null
+      manualOverride: this.manualOverride !== null,
+      monitoring: this.isMonitoring,
+      lastStatus: this.lastStatus === 'on-call',
+      checkInterval: 5000 // Default check interval in ms
     };
   }
 
