@@ -33,6 +33,7 @@ const statusCommand: CommandModule = {
           console.log(`  Is Reconnecting: ${status.arduino.isReconnecting ? 'Yes' : 'No'}`);
           console.log('');
           console.log('On-Air Monitor:');
+          console.log(`  Mode: ${status.onAirMonitor.mode}`);
           console.log(`  Monitoring: ${status.onAirMonitor.monitoring ? '✓' : '✗'}`);
           console.log(`  Last Status: ${status.onAirMonitor.lastStatus === null ? 'Unknown' : 
             (status.onAirMonitor.lastStatus ? 'ON CALL' : 'AVAILABLE')}`);

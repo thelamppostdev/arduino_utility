@@ -96,6 +96,9 @@ export class DaemonServer {
       case 'STATUS':
         this.handleStatusRequest(socket, request);
         break;
+      case 'CONTROL':
+        this.handleControlRequest(socket, request);
+        break;
       case 'PING':
         this.sendResponse(socket, true, 'pong', null, request.id);
         break;
@@ -118,6 +121,32 @@ export class DaemonServer {
       null,
       request.id
     );
+  }
+
+  private handleControlRequest(socket: net.Socket, request: DaemonRequest): void {
+    if (!request.command) {
+      this.sendResponse(socket, false, 'Control command required', null, request.id);
+      return;
+    }
+
+    const cmd = request.command.toLowerCase();
+
+    // Acknowledge and then perform action
+    this.sendResponse(socket, true, `Control command received: ${cmd}`, null, request.id);
+
+    if (cmd === 'shutdown') {
+      // Give the response a moment to be flushed, then shutdown
+      setTimeout(() => {
+        this.shutdown().then(() => process.exit(0));
+      }, 100);
+    } else if (cmd === 'restart') {
+      // For restart, shutdown and exit with non-zero so launchctl or wrapper can reload
+      setTimeout(() => {
+        this.shutdown().then(() => process.exit(0));
+      }, 100);
+    } else {
+      logger.warn(`Unknown control command: ${cmd}`);
+    }
   }
 
   private handleStatusRequest(socket: net.Socket, request: DaemonRequest): void {

@@ -1,5 +1,5 @@
 export interface DaemonRequest {
-  type: 'ARDUINO' | 'STATUS' | 'PING';
+  type: 'ARDUINO' | 'STATUS' | 'PING' | 'CONTROL';
   command?: string;
   id?: string;
 }
@@ -46,6 +46,10 @@ export class Protocol {
 
   static createPingRequest(): string {
     return this.createRequest('PING');
+  }
+
+  static createControlRequest(command: string): string {
+    return this.createRequest('CONTROL', command);
   }
 }
 

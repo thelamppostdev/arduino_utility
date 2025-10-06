@@ -26,7 +26,7 @@ export class DaemonClient {
     });
   }
 
-  async sendCommand(type: 'ARDUINO' | 'STATUS' | 'PING', command?: string): Promise<DaemonResponse> {
+  async sendCommand(type: 'ARDUINO' | 'STATUS' | 'PING' | 'CONTROL', command?: string): Promise<DaemonResponse> {
     if (!this.socket) {
       throw new Error('Not connected to daemon');
     }
@@ -98,7 +98,7 @@ export class DaemonClient {
   }
 
   // Static helper method for one-off commands
-  static async executeCommand(type: 'ARDUINO' | 'STATUS' | 'PING', command?: string): Promise<DaemonResponse> {
+  static async executeCommand(type: 'ARDUINO' | 'STATUS' | 'PING' | 'CONTROL', command?: string): Promise<DaemonResponse> {
     const client = new DaemonClient();
     try {
       await client.connect();
